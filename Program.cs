@@ -19,6 +19,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
     return ConnectionMultiplexer.Connect(connectionString);
 });
 
+builder.Services.AddScoped<ICacheService, CacheService>();
 builder.Services.AddScoped<ITokenRepository, TokenRepository>();
 
 builder.Services.AddControllers();
