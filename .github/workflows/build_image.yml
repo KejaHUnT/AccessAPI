@@ -42,5 +42,4 @@ jobs:
           file: ./Dockerfile
           target: migrations
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_REPOSITORY }}:migrations
-
+          tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_REPOSITORY }}:access-migrations
