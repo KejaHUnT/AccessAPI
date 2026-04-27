@@ -1,6 +1,5 @@
 ﻿using AccessAPI.Models;
 using AccessAPI.Services;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -99,6 +98,36 @@ namespace AccessAPI.Controllers
 
             return ValidationProblem(ModelState);
 
+        }
+
+        [HttpPost("assign-role")]
+        public async Task<IActionResult> AssignRoleToUser(AddUserToRoleRequestDto request)
+        {
+            // Find user by email
+            var user = await _userManager.FindByEmailAsync(request.Email);
+
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            // Check if role exists
+            var roles = await _userManager.GetRolesAsync(user);
+
+            if (roles.Contains(request.RoleName))
+            {
+                return BadRequest("User already has this role");
+            }
+
+            // Assign role
+            var result = await _userManager.AddToRoleAsync(user, request.RoleName);
+
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors);
+            }
+
+            return Ok("Role assigned successfully");
         }
     }
 }
