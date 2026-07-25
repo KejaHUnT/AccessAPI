@@ -2,6 +2,8 @@
 using AccessAPI.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace AccessAPI.Controllers
 {
@@ -53,81 +55,60 @@ namespace AccessAPI.Controllers
         [Route("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
         {
-            //Create IdentityUser object
-
             var user = new IdentityUser
             {
                 UserName = request.Email?.Trim(),
                 Email = request.Email?.Trim(),
             };
-
-            //createUser
-
+        
             var identityResult = await _userManager.CreateAsync(user, request.Password);
-
+        
             if (identityResult.Succeeded)
             {
-                // Add Role to user (Reader)
-                identityResult = await _userManager.AddToRoleAsync(user, "Tenant");
-
-                if (identityResult.Succeeded)
+                var jwtToken = _tokenRepository.CreateJwtToken(user, new List<string>());
+                return Ok(new LoginResponseDto
                 {
-                    return Ok();
-                }
-                else
-                {
-                    if (identityResult.Errors.Any())
-                    {
-                        foreach (var error in identityResult.Errors)
-                        {
-                            ModelState.AddModelError("", error.Description);
-                        }
-                    }
-                }
+                    Email = user.Email,
+                    Roles = new List<string>(),
+                    Token = jwtToken
+                });
             }
-            else
-            {
-                if (identityResult.Errors.Any())
-                {
-                    foreach (var error in identityResult.Errors)
-                    {
-                        ModelState.AddModelError("", error.Description);
-                    }
-                }
-            }
-
+        
+            foreach (var error in identityResult.Errors)
+                ModelState.AddModelError("", error.Description);
+        
             return ValidationProblem(ModelState);
-
         }
-
+        
         [HttpPost("assign-role")]
-        public async Task<IActionResult> AssignRoleToUser(AddUserToRoleRequestDto request)
+        [Authorize]
+        public async Task<IActionResult> AssignRoleToUser([FromBody] AddUserToRoleRequestDto request)
         {
-            // Find user by email
-            var user = await _userManager.FindByEmailAsync(request.Email);
-
-            if (user == null)
-            {
-                return NotFound("User not found");
-            }
-
-            // Check if role exists
+            if (request.RoleName != "Manager" && request.RoleName != "Tenant")
+                return BadRequest("Role must be either 'Manager' or 'Tenant'.");
+        
+            var email = User.FindFirstValue(ClaimTypes.Email);
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null) return Unauthorized();
+        
             var roles = await _userManager.GetRolesAsync(user);
-
-            if (roles.Contains(request.RoleName))
+        
+            if (!roles.Contains(request.RoleName))
             {
-                return BadRequest("User already has this role");
+                var result = await _userManager.AddToRoleAsync(user, request.RoleName);
+                if (!result.Succeeded)
+                    return BadRequest(result.Errors);
             }
-
-            // Assign role
-            var result = await _userManager.AddToRoleAsync(user, request.RoleName);
-
-            if (!result.Succeeded)
+        
+            var updatedRoles = await _userManager.GetRolesAsync(user);
+            var jwtToken = _tokenRepository.CreateJwtToken(user, updatedRoles.ToList());
+        
+            return Ok(new LoginResponseDto
             {
-                return BadRequest(result.Errors);
-            }
-
-            return Ok("Role assigned successfully");
+                Email = user.Email,
+                Roles = updatedRoles.ToList(),
+                Token = jwtToken
+            });
         }
     }
 }
